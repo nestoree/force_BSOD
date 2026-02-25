@@ -2,80 +2,79 @@
 
 ![Python Version](https://img.shields.io/badge/python-3.x-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Method](https://img.shields.io/badge/method-ntdll.dll-red.svg)
 
-Este repositorio contiene un script sencillo en Python diseñado para forzar un **Pantallazo Azul (BSOD)** en Windows 11. El método utilizado es la finalización forzada de un proceso crítico del sistema (`wininit.exe`), lo que provoca un error inmediato de tipo `CRITICAL_PROCESS_DIED`.
+Este repositorio contiene un script avanzado en Python para forzar un **Pantallazo Azul (BSOD)** en Windows 11. A diferencia de otros métodos que intentan cerrar procesos, este utiliza llamadas directas a la API nativa de Windows (`ntdll.dll`) para invocar un error crítico del sistema.
 
 > [!CAUTION]
-> **ADVERTENCIA DE SEGURIDAD:** Este script cerrará tu sistema inmediatamente sin guardar cambios. Úsalo bajo tu propia responsabilidad. Asegúrate de haber guardado todo tu trabajo antes de ejecutarlo. El autor no se hace responsable de pérdidas de datos.
+> **ADVERTENCIA:** Este script detendrá el sistema de forma inmediata. No habrá advertencias de guardado. Úsalo exclusivamente en entornos de prueba o máquinas virtuales.
 
 ---
 
 ## 🛠️ ¿Cómo funciona?
 
-El script utiliza la librería `os` de Python para enviar una señal de terminación forzada al proceso **Windows Initialization Process** (`wininit.exe`). Dado que este proceso es vital para el funcionamiento del sistema operativo, el Kernel de Windows entra en un estado de pánico defensivo y detiene toda actividad para proteger la integridad del sistema.
+El script evita las restricciones de acceso denegado de `taskkill` mediante dos pasos técnicos:
+1. **RtlAdjustPrivilege**: Eleva los privilegios del script para obtener permisos de apagado/error a nivel de Kernel (Privilegio 19).
+2. **NtRaiseHardError**: Envía una señal de error fatal al sistema con el parámetro de respuesta `6`, lo que obliga al Kernel a ejecutar un *Bug Check* (BSOD).
 
-
+Este método es mucho más eficaz en versiones modernas de Windows 11 donde los procesos críticos están protegidos contra administradores estándar.
 
 ---
 
-## 🚀 Uso Rápido
+## 🚀 Uso
 
-### Requisitos previos
-1. **Sistema Operativo:** Windows 10 o Windows 11.
-2. **Lenguaje:** [Python 3.x](https://www.python.org/) instalado y añadido al PATH.
-3. **Privilegios:** Es obligatorio ejecutar la terminal como **Administrador**.
+### Requisitos
+* **Windows 10/11.**
+* **Python 3.x**.
+* **Permisos de Administrador** (necesarios para interactuar con `ntdll.dll`).
 
-### Instrucciones
-1. Descarga el archivo `force_bsod.py` de este repositorio.
-2. Abre una **Terminal** o **PowerShell** con permisos de administrador.
-3. Ejecuta el script con el siguiente comando:
+### Ejecución
+1. Abre la **Terminal** o **PowerShell** como **Administrador**.
+2. Lanza el script:
    ```
-   python force_bsod.py
+   python advanced_bsod.py
    ```
-## 📄 El Código
+
+---
+
+## 📄 Código Fuente
+
 ```
-    import os
-    import ctypes
-    import sys
+import ctypes
+import os
 
-    def is_admin():
-        """Verifica si el script se está ejecutando con privilegios de administrador."""
-        try:
-            return ctypes.windll.shell32.IsUserAnAdmin()
-        except:
-            return False
+def trigger_win11_bsod():
+    ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
 
-    def trigger_bsod():
-        if not is_admin():
-            print("[-] Error: Este script requiere privilegios de administrador.")
-            print("[!] Por favor, abre la terminal como administrador y reintenta.")
-            return
+    response = ctypes.c_uint()
+    
+    print("Ejecutando llamada directa al Kernel... Adiós Windows.")
+    
+    ctypes.windll.ntdll.NtRaiseHardError(
+        0xC0000022, 
+        0,          
+        0,          
+        0,          
+        6,          
+        ctypes.byref(response)
+    )
 
-        print("[+] Invocando el pantallazo azul en 3, 2, 1...")
-        
-        # Comando para matar el proceso crítico wininit.exe
-        # /F = Fuerza el cierre
-        # /IM = Especifica el nombre de la imagen (proceso)
-        os.system("taskkill /F /IM wininit.exe")
-
-    if __name__ == "__main__":
-        trigger_bsod()
+if __name__ == "__main__":
+    trigger_win11_bsod()
 ```
-## ❓ Preguntas Frecuentes
 
-¿Esto romperá mi PC de forma permanente?
+---
 
-**No**. Al reiniciar el ordenador, Windows volverá a cargar todos los procesos correctamente desde el disco duro. Es un error provocado en la memoria RAM, no un daño físico o de archivos persistentes.
+## ❓ FAQ
 
-¿Qué riesgos existen?
+¿Por qué este método y no taskkill?
+Windows 11 ha reforzado la seguridad de procesos como wininit.exe. Incluso como administrador, el sistema suele devolver "Acceso denegado". Usar la API nativa se salta esa capa de protección de la interfaz de usuario.
 
-- Pérdida de datos: Cualquier archivo abierto no guardado se perderá.
-- Corrupción de caché: En casos muy raros, si el PC estaba escribiendo datos importantes en el momento del crash, un archivo podría quedar corrupto.
+¿Es reversible?
+Sí. Al reiniciar el ordenador, el sistema cargará normalmente. No modifica archivos en el disco, solo detiene la ejecución actual en la memoria RAM.
 
-¿Por qué falla si no soy Administrador?
-
-Windows protege sus procesos críticos contra usuarios estándar y malware común. Sin privilegios elevados, el sistema denegará el comando taskkill sobre procesos del sistema.
+---
 
 ## ⚖️ Descargo de Responsabilidad
-Este software se proporciona "tal cual", sin garantía de ningún tipo. El uso de este script es puramente educativo o para pruebas de diagnóstico. No se recomienda su uso en entornos de producción, servidores o equipos con datos críticos sin respaldo.
+
+Este proyecto tiene fines estrictamente educativos y de diagnóstico. El autor no se hace responsable por el mal uso de esta herramienta o la pérdida de datos que pueda ocasionar.
