@@ -32,7 +32,7 @@ Este método es mucho más eficaz en versiones modernas de Windows 11 donde los 
 1. Abre la **Terminal** o **PowerShell** como **Administrador**.
 2. Lanza el script:
    ```
-   python advanced_bsod.py
+   python force_bsod.py
    ```
 
 ---
